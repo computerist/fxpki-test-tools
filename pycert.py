@@ -38,6 +38,7 @@ nsCertType:sslServer
 TLSFeature:[<TLSFeature>,...]
 embeddedSCTList:[<key specification>:<YYYYMMDD>,...]
 delegationUsage:
+subjectKeyId:
 
 Where:
   [] indicates an optional field or component of a field
@@ -87,7 +88,7 @@ generated based on the contents of the certificate.
 from pyasn1.codec.der import decoder
 from pyasn1.codec.der import encoder
 from pyasn1.type import constraint, tag, univ, useful
-from pyasn1_modules import rfc2459
+from pyasn1_modules import rfc2459, rfc5280
 from struct import pack
 import base64
 import datetime
@@ -204,6 +205,14 @@ class UnknownDelegatedCredentialError(UnknownBaseError):
     def __init__(self, value):
         UnknownBaseError.__init__(self, value)
         self.category = 'delegatedCredential'
+
+
+class UnknownSubjectKeyIdError(UnknownBaseError):
+    """Helper exception type to handle unknown Subject Key Identifier args."""
+
+    def __init__(self, value):
+        UnknownBaseError.__init__(self, value)
+        self.category = 'subjectKeyIdentifier'
 
 
 class InvalidSCTSpecification(Error):
@@ -515,6 +524,8 @@ class Certificate(object):
             self.savedEmbeddedSCTListData = (value, critical)
         elif extensionType == 'delegationUsage':
             self.addDelegationUsage(critical)
+        elif extensionType == 'subjectKeyId':
+            self.addSubjectKeyId(critical)
         else:
             raise UnknownExtensionTypeError(extensionType)
 
@@ -666,6 +677,15 @@ class Certificate(object):
             raise UnknownDelegatedCredentialError(critical)
         self.addExtension(univ.ObjectIdentifier('1.3.6.1.4.1.44363.44'), univ.Null(),
                           critical)
+
+    def addSubjectKeyId(self, critical):
+        if critical:
+            raise UnknownSubjectKeyIdError(critical)
+        hasher = hashlib.sha1()
+        hasher.update(self.subjectKey.toDER())
+        digest = hasher.digest()
+        ski = rfc5280.SubjectKeyIdentifier(univ.OctetString(digest))
+        self.addExtension(rfc5280.id_ce_subjectKeyIdentifier, ski, critical)
 
     def addTLSFeature(self, features, critical):
         namedFeatures = {'OCSPMustStaple': 5}
