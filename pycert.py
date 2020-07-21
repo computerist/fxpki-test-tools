@@ -88,7 +88,7 @@ generated based on the contents of the certificate.
 from pyasn1.codec.der import decoder
 from pyasn1.codec.der import encoder
 from pyasn1.type import constraint, tag, univ, useful
-from pyasn1_modules import rfc2459, rfc5280
+from pyasn1_modules import rfc2459
 from struct import pack
 import base64
 import datetime
@@ -684,8 +684,8 @@ class Certificate(object):
         hasher = hashlib.sha1()
         hasher.update(self.subjectKey.toDER())
         digest = hasher.digest()
-        ski = rfc5280.SubjectKeyIdentifier(univ.OctetString(digest))
-        self.addExtension(rfc5280.id_ce_subjectKeyIdentifier, ski, critical)
+        ski = rfc2459.SubjectKeyIdentifier(univ.OctetString(digest))
+        self.addExtension(rfc2459.id_ce_subjectKeyIdentifier, ski, critical)
 
     def addTLSFeature(self, features, critical):
         namedFeatures = {'OCSPMustStaple': 5}
