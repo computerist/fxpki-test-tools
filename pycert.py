@@ -33,7 +33,7 @@ extKeyUsage:[serverAuth,clientAuth,codeSigning,emailProtection
 subjectAlternativeName:[<dNSName|directoryName|"ip4:"iPV4Address>,...]
 authorityInformationAccess:<OCSP URI>
 certificatePolicies:[<policy OID>,...]
-nameConstraints:{permitted,excluded}:[<dNSName|directoryName>,...]
+[nameConstraints:[<permitted :<dNSName|directoryName>|excluded:<dNSName|directoryName>>,...]]
 nsCertType:sslServer
 TLSFeature:[<TLSFeature>,...]
 embeddedSCTList:[<key specification>:<YYYYMMDD>,...]
@@ -624,27 +624,35 @@ class Certificate(object):
 
     def addNameConstraints(self, constraints, critical):
         nameConstraints = rfc2459.NameConstraints()
-        if constraints.startswith('permitted:'):
-            (subtreesType, subtreesTag) = ('permittedSubtrees', 0)
-        elif constraints.startswith('excluded:'):
-            (subtreesType, subtreesTag) = ('excludedSubtrees', 1)
-        else:
-            raise UnknownNameConstraintsSpecificationError(constraints)
-        generalSubtrees = rfc2459.GeneralSubtrees().subtype(
-            implicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, subtreesTag))
-        subtrees = constraints[(constraints.find(':') + 1):]
-        for pos, name in enumerate(subtrees.split(',')):
-            generalName = rfc2459.GeneralName()
-            if '/' in name:
-                directoryName = stringToDN(name,
-                                           tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 4))
-                generalName['directoryName'] = directoryName
-            else:
-                generalName['dNSName'] = name
-            generalSubtree = rfc2459.GeneralSubtree()
-            generalSubtree['base'] = generalName
-            generalSubtrees.setComponentByPosition(pos, generalSubtree)
-        nameConstraints[subtreesType] = generalSubtrees
+        subtrees = {'permitted': [], 'excluded': []}
+        for constraint in constraints.split(','):
+            (subtreeName, nameData) = constraint.split(':')
+            if subtreeName not in subtrees.keys():
+                raise UnknownNameConstraintsSpecificationError(subtreeName)
+            subtree = subtrees[subtreeName]
+            subtree.append(nameData)
+
+        for key in subtrees.keys():
+            if 'permitted' == key:
+                (subtreesType, subtreesTag) = ('permittedSubtrees', 0)
+            if 'excluded' == key:
+                (subtreesType, subtreesTag) = ('excludedSubtrees', 1)
+
+            generalSubtrees = rfc2459.GeneralSubtrees().subtype(
+                implicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, subtreesTag))
+
+            for pos, name in enumerate(subtrees[key]):
+                generalName = rfc2459.GeneralName()
+                if '/' in name:
+                    directoryName = stringToDN(name,
+                                            tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 4))
+                    generalName['directoryName'] = directoryName
+                else:
+                    generalName['dNSName'] = name
+                generalSubtree = rfc2459.GeneralSubtree()
+                generalSubtree['base'] = generalName
+                generalSubtrees.setComponentByPosition(pos, generalSubtree)
+            nameConstraints[subtreesType] = generalSubtrees
         self.addExtension(rfc2459.id_ce_nameConstraints, nameConstraints, critical)
 
     def addNSCertType(self, certType, critical):
