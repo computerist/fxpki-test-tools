@@ -24,10 +24,10 @@ python pycert.py \< path/to/certspec \> path/to/pem
 #### With virtualenv
  - Find yourself a recent-ish python (I used 3.6) with virtualenv
  - Set up a virtualenv and install the requirements like so:
- `
+ ```
  ./virtualenv ./venv_fxpki
  ./venv_fxpki/bin/pip install -r requirements.txt
- `
+ ```
 - Run the tools within the virtuelenv, e.g.:
 `
 ./venv_fxpki/bin/python pycert.py \< path/to/certspec \> path/to/pem
