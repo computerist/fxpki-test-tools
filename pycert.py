@@ -15,6 +15,7 @@ subject:<subject distinguished name specification>
 [version:{1,2,3,4}]
 [validity:<YYYYMMDD-YYYYMMDD|duration in days>]
 [issuerKey:<key specification>]
+[issuerSerialNumber:<the issuing certificate's serial number (integer in the interval [1, 127])>]
 [subjectKey:<key specification>]
 [signature:{sha256WithRSAEncryption,sha1WithRSAEncryption,
             md5WithRSAEncryption,ecdsaWithSHA256,ecdsaWithSHA384,
@@ -84,6 +85,11 @@ feature value (see rfc7633 for more information).
 
 If a serial number is not explicitly specified, it is automatically
 generated based on the contents of the certificate.
+
+If an AuthorityKeyIdentifier extension is specified it will contain the
+Authority Key Identifier *Key Indentifier* by default. If an
+IssuerSerialNumber is also specified, the AKI will also include the
+issuer principal and issuer serial number.
 """
 
 from pyasn1.codec.der import decoder
@@ -410,6 +416,7 @@ class Certificate(object):
         self.subjectKey = pykey.keyFromSpecification('default')
         self.issuerKey = pykey.keyFromSpecification('default')
         self.serialNumber = None
+        self.issuerSerialNumber = None
         self.decodeParams(paramStream)
         # If a serial number wasn't specified, generate one based on
         # the certificate contents.
@@ -467,6 +474,13 @@ class Certificate(object):
             self.subject = value
         elif param == 'issuer':
             self.issuer = value
+        elif param == 'issuerSerialNumber':
+            issuerSerialNumber = int(value)
+            # Ensure only serial numbers that conform to the rules listed in
+            # generateSerialNumber() are permitted.
+            if issuerSerialNumber < 1 or issuerSerialNumber > 127:
+                raise InvalidSerialNumber(value)
+            self.issuerSerialNumber = serialBytesToString([issuerSerialNumber])
         elif param == 'validity':
             self.decodeValidity(value)
         elif param == 'extension':
@@ -705,10 +719,17 @@ class Certificate(object):
         hasher.update(self.issuerKey.toDER())
         akiKi = rfc2459.KeyIdentifier().subtype(implicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0), value = hasher.digest())
         aki = rfc2459.AuthorityKeyIdentifier()
-        aki.setComponents(akiKi)
 
-        #TODO: Add support for getting the issuer's serial number
-        #(see https://github.com/computerist/fxpki-test-tools/issues/2)
+        # If the issuerSerialNumber is set, we can add AKI data for Issuer principal and the issuer serial number
+        if None != self.issuerSerialNumber:
+            issuerName = rfc2459.GeneralNames().subtype(implicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 1))
+            generalName = stringToDN(self.issuer,
+                tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 4))
+            issuerName.setComponentByPosition(0,generalName)
+            csn = rfc2459.CertificateSerialNumber().subtype(implicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2), value = decoder.decode(self.issuerSerialNumber)[0])
+            aki.setComponents(akiKi, issuerName, csn)
+        else:
+            aki.setComponents(akiKi)
         self.addExtension(rfc2459.id_ce_authorityKeyIdentifier, aki, critical)
 
     def addTLSFeature(self, features, critical):

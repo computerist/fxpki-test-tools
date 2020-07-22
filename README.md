@@ -6,8 +6,8 @@ Mozilla have some handy tools for maintaining a set of test certificates as [par
 
 These are those tools with just enough packaging to be convenient. And some extra features:
  - Support for multiple subtrees in the NameConstraints extension
- - Support for creating a SubjectKeyIdentifier
- - Support for creating a AuthorityKeyIdentifier of KeyIdentifier type
+ - Support for creating a SubjectKeyIdentifier extension
+ - Support for creating an AuthorityKeyIdentifier extension
 
 ## How do I use them?
 It's probably best to read the instructions in the source for each script, but as a minimum:
