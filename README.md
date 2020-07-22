@@ -4,7 +4,10 @@ Some tools for generating test data, free from the fetters of mozilla-central
 ## What?
 Mozilla have some handy tools for maintaining a set of test certificates as [part of the unit test suite for PSM](https://searchfox.org/mozilla-central/source/security/manager/ssl/tests/unit/pycert.py)
 
-These are those tools with just enough packaging to be convenient.
+These are those tools with just enough packaging to be convenient. And some extra features:
+ - Support for multiple subtrees in the NameConstraints extension
+ - Support for creating a SubjectKeyIdentifier
+ - Support for creating a AuthorityKeyIdentifier of KeyIdentifier type
 
 ## How do I use them?
 It's probably best to read the instructions in the source for each script, but as a minimum:

@@ -39,6 +39,7 @@ TLSFeature:[<TLSFeature>,...]
 embeddedSCTList:[<key specification>:<YYYYMMDD>,...]
 delegationUsage:
 subjectKeyId:
+authorityKeyId:
 
 Where:
   [] indicates an optional field or component of a field
@@ -87,7 +88,7 @@ generated based on the contents of the certificate.
 
 from pyasn1.codec.der import decoder
 from pyasn1.codec.der import encoder
-from pyasn1.type import constraint, tag, univ, useful
+from pyasn1.type import constraint, tag, univ, useful, namedtype
 from pyasn1_modules import rfc2459
 from struct import pack
 import base64
@@ -213,6 +214,14 @@ class UnknownSubjectKeyIdError(UnknownBaseError):
     def __init__(self, value):
         UnknownBaseError.__init__(self, value)
         self.category = 'subjectKeyIdentifier'
+
+
+class UnknownAuthorityKeyIdError(UnknownBaseError):
+    """Helper exception type to handle unknown Authority Key Identifier args."""
+
+    def __init__(self, value):
+        UnknownBaseError.__init__(self, value)
+        self.category = 'authorityKeyIdentifier'
 
 
 class InvalidSCTSpecification(Error):
@@ -526,6 +535,8 @@ class Certificate(object):
             self.addDelegationUsage(critical)
         elif extensionType == 'subjectKeyId':
             self.addSubjectKeyId(critical)
+        elif extensionType == 'authorityKeyId':
+            self.addAuthorityKeyId(critical)
         else:
             raise UnknownExtensionTypeError(extensionType)
 
@@ -686,6 +697,19 @@ class Certificate(object):
         digest = hasher.digest()
         ski = rfc2459.SubjectKeyIdentifier(univ.OctetString(digest))
         self.addExtension(rfc2459.id_ce_subjectKeyIdentifier, ski, critical)
+
+    def addAuthorityKeyId(self, critical):
+        if critical:
+            raise UnknownAuthorityKeyIdError(critical)
+        hasher = hashlib.sha1()
+        hasher.update(self.issuerKey.toDER())
+        akiKi = rfc2459.KeyIdentifier().subtype(implicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0), value = hasher.digest())
+        aki = rfc2459.AuthorityKeyIdentifier()
+        aki.setComponents(akiKi)
+
+        #TODO: Add support for getting the issuer's serial number
+        #(see https://github.com/computerist/fxpki-test-tools/issues/2)
+        self.addExtension(rfc2459.id_ce_authorityKeyIdentifier, aki, critical)
 
     def addTLSFeature(self, features, critical):
         namedFeatures = {'OCSPMustStaple': 5}
