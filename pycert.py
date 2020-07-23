@@ -40,7 +40,7 @@ TLSFeature:[<TLSFeature>,...]
 embeddedSCTList:[<key specification>:<YYYYMMDD>,...]
 delegationUsage:
 subjectKeyId:
-authorityKeyId:
+authorityKeyId:[ki, issuer, serialNumber]
 
 Where:
   [] indicates an optional field or component of a field
@@ -89,7 +89,9 @@ generated based on the contents of the certificate.
 If an AuthorityKeyIdentifier extension is specified it will contain the
 Authority Key Identifier *Key Indentifier* by default. If an
 IssuerSerialNumber is also specified, the AKI will also include the
-issuer principal and issuer serial number.
+issuer principal and issuer serial number. You may also specify ki,
+issuer and serialNumber; if any of these are specified, only the
+specified AKI components will be included in the certificate
 """
 
 from pyasn1.codec.der import decoder
@@ -550,7 +552,7 @@ class Certificate(object):
         elif extensionType == 'subjectKeyId':
             self.addSubjectKeyId(critical)
         elif extensionType == 'authorityKeyId':
-            self.addAuthorityKeyId(critical)
+            self.addAuthorityKeyId(value, critical)
         else:
             raise UnknownExtensionTypeError(extensionType)
 
@@ -712,7 +714,11 @@ class Certificate(object):
         ski = rfc2459.SubjectKeyIdentifier(univ.OctetString(digest))
         self.addExtension(rfc2459.id_ce_subjectKeyIdentifier, ski, critical)
 
-    def addAuthorityKeyId(self, critical):
+    def addAuthorityKeyId(self, akiTypes, critical):
+        types = [st.strip() for st in akiTypes.split(',')]
+
+        noneSpecified = 0 == len(akiTypes.strip())
+
         if critical:
             raise UnknownAuthorityKeyIdError(critical)
         hasher = hashlib.sha1()
@@ -727,9 +733,15 @@ class Certificate(object):
                 tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 4))
             issuerName.setComponentByPosition(0,generalName)
             csn = rfc2459.CertificateSerialNumber().subtype(implicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2), value = decoder.decode(self.issuerSerialNumber)[0])
-            aki.setComponents(akiKi, issuerName, csn)
+            if noneSpecified or 'ki' in types:
+                aki.setComponentByPosition(0, akiKi)
+            if noneSpecified or 'issuer' in types:
+                aki.setComponentByPosition(1, issuerName)
+            if noneSpecified or 'serialNumber' in types:
+                aki.setComponentByPosition(2, csn)
         else:
-            aki.setComponents(akiKi)
+            if noneSpecified or 'ki' in types:
+                aki.setComponentByPosition(0, akiKi)
         self.addExtension(rfc2459.id_ce_authorityKeyIdentifier, aki, critical)
 
     def addTLSFeature(self, features, critical):
