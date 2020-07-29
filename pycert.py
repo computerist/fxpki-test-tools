@@ -66,15 +66,17 @@ latter, this will result in a notBefore of 'now' - duration/2 and a
 notAfter of 'now' + duration/2.
 
 Issuer and subject distinguished name specifications are of the form
-'[stringEncoding]/C=XX/O=Example/CN=example.com'. C (country name), ST
-(state or province name), L (locality name), O (organization name), OU
-(organizational unit name), CN (common name) and emailAddress (email
-address) are currently supported. The optional stringEncoding field may
-be 'utf8String' or 'printableString'. If the given string does not
-contain a '/', it is assumed to represent a common name. If an empty
-string is provided, then an empty distinguished name is returned.
-DirectoryNames also use this format. When specifying a directoryName in
-a nameConstraints extension, the implicit form may not be used.
+'[stringEncoding]/C=XX/O=Example/CN=example.com/OID:2.5.4.5=1234'. C
+(country name), ST (state or province name), L (locality name), O
+(organization name), OU (organizational unit name), CN (common name),
+emailAddress (email address) and OID:x (unbounded directory string
+based name with OID x) are currently supported. The optional
+stringEncoding field may be 'utf8String' or 'printableString'. If the
+given string does not contain a '/', it is assumed to represent a
+common name. If an empty string is provided, then an empty
+distinguished name is returned. DirectoryNames also use this format.
+When specifying a directoryName in a nameConstraints extension, the
+implicit form may not be used.
 
 If an extension name has '[critical]' after it, it will be marked as
 critical. Otherwise (by default), it will not be marked as critical.
@@ -96,7 +98,7 @@ specified AKI components will be included in the certificate
 
 from pyasn1.codec.der import decoder
 from pyasn1.codec.der import encoder
-from pyasn1.type import constraint, tag, univ, useful, namedtype
+from pyasn1.type import char, constraint, tag, univ, useful, namedtype
 from pyasn1_modules import rfc2459
 from struct import pack
 import base64
@@ -253,6 +255,22 @@ class InvalidSerialNumber(Error):
     def __str__(self):
         return repr(self.value)
 
+ub_size = univ.Integer(128)
+
+class UnboundedStringName(univ.Choice):
+    componentType = namedtype.NamedTypes(
+        namedtype.NamedType('teletexString', char.TeletexString().subtype(
+            subtypeSpec=constraint.ValueSizeConstraint(1, ub_size))),
+        namedtype.NamedType('printableString', char.PrintableString().subtype(
+            subtypeSpec=constraint.ValueSizeConstraint(1, ub_size))),
+        namedtype.NamedType('universalString', char.UniversalString().subtype(
+            subtypeSpec=constraint.ValueSizeConstraint(1, ub_size))),
+        namedtype.NamedType('utf8String',
+                            char.UTF8String().subtype(subtypeSpec=constraint.ValueSizeConstraint(1, ub_size))),
+        namedtype.NamedType('bmpString',
+                            char.BMPString().subtype(subtypeSpec=constraint.ValueSizeConstraint(1, ub_size)))
+    )
+
 
 def getASN1Tag(asn1Type):
     """Helper function for returning the base tag value of a given
@@ -282,7 +300,7 @@ def stringToDN(string, tag=None):
     if string and '/' not in string:
         string = '/CN=%s' % string
     rdns = rfc2459.RDNSequence()
-    pattern = '/(C|ST|L|O|OU|CN|emailAddress)='
+    pattern = '/(C|ST|L|O|OU|CN|emailAddress|OID:\d+(?:.\d+)*)='
     split = re.split(pattern, string)
     # split should now be [[encoding], <type>, <value>, <type>, <value>, ...]
     if split[0]:
@@ -312,6 +330,10 @@ def stringToDN(string, tag=None):
         elif nameType == 'emailAddress':
             ava['type'] = rfc2459.emailAddress
             nameComponent = rfc2459.Pkcs9email(value)
+        elif nameType.startswith('OID:'):
+            oid = nameType[len('OID:'):]
+            ava['type'] = univ.ObjectIdentifier(oid)
+            nameComponent = UnboundedStringName()
         else:
             raise UnknownDNTypeError(nameType)
         if not nameType == 'C' and not nameType == 'emailAddress':
